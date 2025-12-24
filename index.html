@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voice Recorder</title>
+    <style>
+        :root {
+            --bg-color: #121212;
+            --text-color: #e0e0e0;
+            --accent-color: #bb86fc;
+            --secondary-color: #03dac6;
+            --surface-color: #1e1e1e;
+            --error-color: #cf6679;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+
+        h1 {
+            color: var(--accent-color);
+            margin-bottom: 2rem;
+        }
+
+        .container {
+            background-color: var(--surface-color);
+            padding: 2rem;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+            width: 100%;
+            max-width: 500px;
+            text-align: center;
+        }
+
+        button {
+            background-color: var(--accent-color);
+            color: #000;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-size: 1rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: transform 0.2s, opacity 0.2s;
+            margin: 10px;
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        button:active {
+            transform: scale(0.98);
+        }
+
+        button.stop {
+            background-color: var(--error-color);
+            color: white;
+        }
+
+        .status {
+            margin-top: 1rem;
+            font-size: 0.9rem;
+            color: var(--secondary-color);
+            min-height: 1.2em;
+        }
+
+        .config {
+            margin-top: 2rem;
+            text-align: left;
+            font-size: 0.85rem;
+            border-top: 1px solid #333;
+            padding-top: 1rem;
+        }
+
+        .config label {
+            display: block;
+            margin-bottom: 5px;
+            color: #aaa;
+        }
+
+        .config input {
+            width: 100%;
+            padding: 8px;
+            margin-bottom: 10px;
+            background-color: #2c2c2c;
+            border: 1px solid #444;
+            color: white;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+
+        #visualizer {
+            width: 100%;
+            height: 60px;
+            background-color: #000;
+            margin: 1rem 0;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>Voice Recorder</h1>
+        
+        <canvas id="visualizer"></canvas>
+
+        <div class="controls">
+            <button id="startBtn">Record</button>
+            <button id="stopBtn" class="stop" disabled>Stop & Upload</button>
+        </div>
+
+        <div id="status" class="status">Ready</div>
+
+        <div class="config">
+            <h3>Configuration</h3>
+            <label for="githubToken">GitHub PAT</label>
+            <input type="password" id="githubToken" placeholder="ghp_...">
+            
+            <label for="repoOwner">Owner</label>
+            <input type="text" id="repoOwner" placeholder="username">
+
+            <label for="repoName">Repository</label>
+            <input type="text" id="repoName" placeholder="voice_recorder">
+            
+            <button id="saveConfigBtn" style="width: 100%; margin: 10px 0;">Save Config</button>
+        </div>
+    </div>
+
+    <script>
+        let mediaRecorder;
+        let audioChunks = [];
+        let audioContext;
+        let analyser;
+        let source;
+        let canvas = document.getElementById('visualizer');
+        let canvasCtx = canvas.getContext('2d');
+        let animationId;
+
+        const startBtn = document.getElementById('startBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const statusEl = document.getElementById('status');
+        const configInputs = {
+            token: document.getElementById('githubToken'),
+            owner: document.getElementById('repoOwner'),
+            repo: document.getElementById('repoName')
+        };
+
+        // Load config
+        const loadConfig = () => {
+            configInputs.token.value = localStorage.getItem('gh_token') || '';
+            configInputs.owner.value = localStorage.getItem('gh_owner') || '';
+            configInputs.repo.value = localStorage.getItem('gh_repo') || '';
+        };
+        loadConfig();
+
+        document.getElementById('saveConfigBtn').addEventListener('click', () => {
+            localStorage.setItem('gh_token', configInputs.token.value);
+            localStorage.setItem('gh_owner', configInputs.owner.value);
+            localStorage.setItem('gh_repo', configInputs.repo.value);
+            statusEl.textContent = 'Configuration saved!';
+            setTimeout(() => statusEl.textContent = 'Ready', 2000);
+        });
+
+        startBtn.addEventListener('click', async () => {
+             if (!configInputs.token.value || !configInputs.owner.value || !configInputs.repo.value) {
+                statusEl.textContent = 'Please fill in configuration first.';
+                statusEl.style.color = 'var(--error-color)';
+                return;
+            }
+
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                startRecording(stream);
+            } catch (err) {
+                console.error('Error accessing microphone:', err);
+                statusEl.textContent = 'Error accessing microphone: ' + err.message;
+            }
+        });
+
+        stopBtn.addEventListener('click', () => {
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                mediaRecorder.stop();
+                stopBtn.disabled = true;
+                startBtn.disabled = false;
+                statusEl.textContent = 'Processing...';
+            }
+        });
+
+        function startRecording(stream) {
+            audioChunks = [];
+            mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' }); // Chrome supports webm
+            
+            mediaRecorder.ondataavailable = event => {
+                if (event.data.size > 0) {
+                    audioChunks.push(event.data);
+                }
+            };
+
+            mediaRecorder.onstop = async () => {
+                const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                visualizeStop();
+                stream.getTracks().forEach(track => track.stop()); // Stop mic
+                await uploadToGitHub(audioBlob);
+            };
+
+            mediaRecorder.start();
+            startBtn.disabled = true;
+            stopBtn.disabled = false;
+            statusEl.textContent = 'Recording...';
+            statusEl.style.color = 'var(--secondary-color)';
+            
+            // Visualization
+            setupVisualizer(stream);
+        }
+
+        function setupVisualizer(stream) {
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            analyser = audioContext.createAnalyser();
+            source = audioContext.createMediaStreamSource(stream);
+            source.connect(analyser);
+            analyser.fftSize = 256;
+            drawVisualizer();
+        }
+
+        function drawVisualizer() {
+            const bufferLength = analyser.frequencyBinCount;
+            const dataArray = new Uint8Array(bufferLength);
+            
+            const draw = () => {
+                animationId = requestAnimationFrame(draw);
+                analyser.getByteFrequencyData(dataArray);
+
+                canvasCtx.fillStyle = '#000';
+                canvasCtx.fillRect(0, 0, canvas.width, canvas.height);
+
+                const barWidth = (canvas.width / bufferLength) * 2.5;
+                let barHeight;
+                let x = 0;
+
+                for(let i = 0; i < bufferLength; i++) {
+                    barHeight = dataArray[i] / 2;
+                    canvasCtx.fillStyle = `rgb(${barHeight + 100}, 50, 50)`;
+                    canvasCtx.fillRect(x, canvas.height - barHeight, barWidth, barHeight);
+                    x += barWidth + 1;
+                }
+            };
+            draw();
+        }
+
+        function visualizeStop() {
+            if (animationId) cancelAnimationFrame(animationId);
+            if (audioContext) audioContext.close();
+            canvasCtx.fillStyle = '#000';
+            canvasCtx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+
+        async function uploadToGitHub(blob) {
+            statusEl.textContent = 'Uploading to GitHub...';
+            
+            const reader = new FileReader();
+            reader.readAsDataURL(blob);
+            reader.onloadend = async () => {
+                const base64data = reader.result.split(',')[1];
+                const filename = `recording_${new Date().toISOString().replace(/[:.]/g, '-')}.webm`;
+                const path = `recordings/${filename}`;
+                
+                const url = `https://api.github.com/repos/${configInputs.owner.value}/${configInputs.repo.value}/contents/${path}`;
+                
+                try {
+                    const response = await fetch(url, {
+                        method: 'PUT',
+                        headers: {
+                            'Authorization': `token ${configInputs.token.value}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            message: `Add recording ${filename}`,
+                            content: base64data
+                        })
+                    });
+
+                    if (response.ok) {
+                        statusEl.textContent = 'Upload Successful!';
+                    } else {
+                        const errorData = await response.json();
+                        statusEl.textContent = `Upload Failed: ${errorData.message}`;
+                        statusEl.style.color = 'var(--error-color)';
+                        console.error('GitHub Error:', errorData);
+                    }
+                } catch (error) {
+                    statusEl.textContent = `Error: ${error.message}`;
+                    statusEl.style.color = 'var(--error-color)';
+                }
+            };
+        }
+    </script>
+</body>
+</html>
