@@ -229,25 +229,18 @@ def transcribe_audio(file_path):
 
 def format_transcript(recording_time, content):
     """
-    Format transcript in a structured, machine-readable format.
+    Compact transcript format.
     
     Format:
-    ---
-    Recording Time: YYYY-MM-DD HH:MM:SS
-    ---
-    Content: <transcribed text>
-    
-    ================================================================================
+    [2025-12-25 12:41] 现在开始往每天记录我所有的ID
     """
-    separator = "=" * 80
-    return f"""---
-Recording Time: {recording_time}
----
-Content: {content}
-
-{separator}
-
-"""
+    # Extract just HH:MM from the time
+    try:
+        time_short = recording_time[:16]  # "2025-12-25 12:41"
+    except:
+        time_short = recording_time
+    
+    return f"[{time_short}] {content}\n\n"
 
 
 def get_or_create_doc(gdocs, state):
