@@ -3,131 +3,247 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>Voice Recorder</title>
+    <link rel="apple-touch-icon"
+        href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎤</text></svg>">
     <style>
+        * {
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
         :root {
-            --bg-color: #121212;
-            --text-color: #e0e0e0;
-            --accent-color: #bb86fc;
-            --secondary-color: #03dac6;
-            --surface-color: #1e1e1e;
-            --error-color: #cf6679;
+            --ios-blue: #007AFF;
+            --ios-blue-dark: #0056CC;
+            --ios-red: #FF3B30;
+            --ios-green: #34C759;
+            --ios-gray: #8E8E93;
+            --ios-gray-dark: #636366;
+            --bg-primary: #000000;
+            --bg-secondary: #1C1C1E;
+            --bg-tertiary: #2C2C2E;
+            --text-primary: #FFFFFF;
+            --text-secondary: #8E8E93;
+            --separator: #38383A;
         }
 
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: var(--bg-color);
-            color: var(--text-color);
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif;
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
             display: flex;
             flex-direction: column;
             align-items: center;
-            justify-content: center;
-            min-height: 100vh;
-            margin: 0;
-            padding: 20px;
-        }
-
-        h1 {
-            color: var(--accent-color);
-            margin-bottom: 2rem;
+            padding: 60px 20px 40px;
         }
 
         .container {
-            background-color: var(--surface-color);
-            padding: 2rem;
-            border-radius: 12px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
             width: 100%;
-            max-width: 500px;
-            text-align: center;
+            max-width: 400px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 30px;
         }
 
-        button {
-            background-color: var(--accent-color);
-            color: #000;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 20px;
-            font-size: 1rem;
-            font-weight: bold;
-            cursor: pointer;
-            transition: transform 0.2s, opacity 0.2s;
-            margin: 10px;
-        }
-
-        button:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-
-        button:active {
-            transform: scale(0.98);
-        }
-
-        button.stop {
-            background-color: var(--error-color);
-            color: white;
-        }
-
-        .status {
-            margin-top: 1rem;
-            font-size: 0.9rem;
-            color: var(--secondary-color);
-            min-height: 1.2em;
+        h1 {
+            font-size: 34px;
+            font-weight: 700;
+            margin: 0;
+            letter-spacing: -0.5px;
         }
 
         #visualizer {
             width: 100%;
-            height: 60px;
-            background-color: #000;
-            margin: 1rem 0;
-            border-radius: 4px;
+            height: 80px;
+            background: var(--bg-secondary);
+            border-radius: 16px;
+            overflow: hidden;
         }
 
-        .config-section {
-            margin-top: 2rem;
-            padding-top: 1rem;
-            border-top: 1px solid #333;
-            text-align: left;
+        .record-btn-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
         }
 
-        .config-section input {
+        .record-btn {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            border: 4px solid var(--ios-blue);
+            background: transparent;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            position: relative;
+        }
+
+        .record-btn-inner {
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            background: var(--ios-blue);
+            transition: all 0.2s ease;
+        }
+
+        .record-btn.recording .record-btn-inner {
+            width: 28px;
+            height: 28px;
+            border-radius: 6px;
+            background: var(--ios-red);
+        }
+
+        .record-btn.recording {
+            border-color: var(--ios-red);
+        }
+
+        .record-btn:active {
+            transform: scale(0.95);
+        }
+
+        .status {
+            font-size: 17px;
+            color: var(--text-secondary);
+            text-align: center;
+            min-height: 24px;
+        }
+
+        .status.success {
+            color: var(--ios-green);
+        }
+
+        .status.error {
+            color: var(--ios-red);
+        }
+
+        .status.recording {
+            color: var(--ios-red);
+        }
+
+        /* Settings Card */
+        .settings-card {
             width: 100%;
-            padding: 8px;
-            margin: 5px 0 15px 0;
-            background: #2a2a2a;
-            border: 1px solid #444;
-            border-radius: 4px;
-            color: white;
-            box-sizing: border-box;
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            overflow: hidden;
         }
 
-        .config-section label {
-            font-size: 0.9rem;
-            color: #aaa;
+        .settings-row {
+            padding: 12px 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            border-bottom: 1px solid var(--separator);
+        }
+
+        .settings-row:last-child {
+            border-bottom: none;
+        }
+
+        .settings-label {
+            font-size: 13px;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .settings-input {
+            width: 100%;
+            background: var(--bg-tertiary);
+            border: none;
+            border-radius: 8px;
+            padding: 12px;
+            font-size: 17px;
+            color: var(--text-primary);
+            outline: none;
+        }
+
+        .settings-input::placeholder {
+            color: var(--ios-gray-dark);
+        }
+
+        .ios-button {
+            width: 100%;
+            background: var(--ios-blue);
+            border: none;
+            border-radius: 12px;
+            padding: 14px;
+            font-size: 17px;
+            font-weight: 600;
+            color: white;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .ios-button:active {
+            background: var(--ios-blue-dark);
+        }
+
+        .link-button {
+            background: none;
+            border: none;
+            color: var(--ios-blue);
+            font-size: 15px;
+            cursor: pointer;
+            padding: 8px;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        /* Pulse animation for recording */
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.5;
+            }
+        }
+
+        .status.recording {
+            animation: pulse 1.5s ease-in-out infinite;
         }
     </style>
 </head>
 
 <body>
-
     <div class="container">
         <h1>Voice Recorder</h1>
 
         <canvas id="visualizer"></canvas>
 
-        <div class="controls">
-            <button id="startBtn">Record</button>
-            <button id="stopBtn" class="stop" disabled>Stop & Upload</button>
+        <div class="record-btn-container">
+            <button class="record-btn" id="recordBtn">
+                <div class="record-btn-inner"></div>
+            </button>
+            <div id="status" class="status">Tap to Record</div>
         </div>
 
-        <div id="status" class="status">Ready</div>
+        <button class="link-button" id="changeTokenLink">Settings</button>
 
-        <div class="config-section" id="configSection">
-            <label>GitHub Token (stored locally only)</label>
-            <input type="password" id="tokenInput" placeholder="ghp_...">
-            <button id="saveTokenBtn" style="width: 100%;">Save Token</button>
+        <div class="settings-card hidden" id="configSection">
+            <div class="settings-row">
+                <span class="settings-label">GitHub Token</span>
+                <input type="password" class="settings-input" id="tokenInput" placeholder="ghp_...">
+            </div>
+            <div class="settings-row">
+                <button class="ios-button" id="saveTokenBtn">Save Token</button>
+            </div>
         </div>
     </div>
 
@@ -140,21 +256,20 @@
         let canvas = document.getElementById('visualizer');
         let canvasCtx = canvas.getContext('2d');
         let animationId;
+        let isRecording = false;
 
-        const startBtn = document.getElementById('startBtn');
-        const stopBtn = document.getElementById('stopBtn');
+        const recordBtn = document.getElementById('recordBtn');
         const statusEl = document.getElementById('status');
         const tokenInput = document.getElementById('tokenInput');
         const saveTokenBtn = document.getElementById('saveTokenBtn');
         const configSection = document.getElementById('configSection');
+        const changeTokenLink = document.getElementById('changeTokenLink');
 
-        // Fixed config (safe to commit)
         const CONFIG = {
             owner: 'bellerswang',
             repo: 'voice_recorder'
         };
 
-        // Load token from localStorage
         function getToken() {
             return localStorage.getItem('gh_token') || '';
         }
@@ -164,50 +279,65 @@
         }
 
         // Initialize
-        tokenInput.value = getToken();
-        if (getToken()) {
-            configSection.style.display = 'none';
+        if (!getToken()) {
+            configSection.classList.remove('hidden');
         }
+
+        changeTokenLink.addEventListener('click', () => {
+            configSection.classList.toggle('hidden');
+            if (!configSection.classList.contains('hidden')) {
+                tokenInput.value = getToken();
+            }
+        });
 
         saveTokenBtn.addEventListener('click', () => {
             const token = tokenInput.value.trim();
             if (token) {
                 setToken(token);
-                configSection.style.display = 'none';
+                configSection.classList.add('hidden');
                 statusEl.textContent = 'Token saved!';
-                setTimeout(() => statusEl.textContent = 'Ready', 2000);
+                statusEl.className = 'status success';
+                setTimeout(() => {
+                    statusEl.textContent = 'Tap to Record';
+                    statusEl.className = 'status';
+                }, 2000);
             }
         });
 
-        startBtn.addEventListener('click', async () => {
+        recordBtn.addEventListener('click', async () => {
+            if (isRecording) {
+                stopRecording();
+            } else {
+                await startRecording();
+            }
+        });
+
+        async function startRecording() {
             const token = getToken();
             if (!token) {
-                statusEl.textContent = 'Please enter your GitHub token first.';
-                statusEl.style.color = 'var(--error-color)';
-                configSection.style.display = 'block';
+                statusEl.textContent = 'Please add your token first';
+                statusEl.className = 'status error';
+                configSection.classList.remove('hidden');
                 return;
             }
 
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                startRecording(stream);
+                beginRecording(stream);
             } catch (err) {
                 console.error('Error accessing microphone:', err);
-                statusEl.textContent = 'Error accessing microphone: ' + err.message;
+                statusEl.textContent = 'Microphone access denied';
+                statusEl.className = 'status error';
             }
-        });
+        }
 
-        stopBtn.addEventListener('click', () => {
-            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-                mediaRecorder.stop();
-                stopBtn.disabled = true;
-                startBtn.disabled = false;
-                statusEl.textContent = 'Processing...';
-            }
-        });
-
-        function startRecording(stream) {
+        function beginRecording(stream) {
             audioChunks = [];
+            isRecording = true;
+            recordBtn.classList.add('recording');
+            statusEl.textContent = 'Recording...';
+            statusEl.className = 'status recording';
+
             mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
 
             mediaRecorder.ondataavailable = event => {
@@ -224,12 +354,17 @@
             };
 
             mediaRecorder.start();
-            startBtn.disabled = true;
-            stopBtn.disabled = false;
-            statusEl.textContent = 'Recording...';
-            statusEl.style.color = 'var(--secondary-color)';
-
             setupVisualizer(stream);
+        }
+
+        function stopRecording() {
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                isRecording = false;
+                recordBtn.classList.remove('recording');
+                mediaRecorder.stop();
+                statusEl.textContent = 'Uploading...';
+                statusEl.className = 'status';
+            }
         }
 
         function setupVisualizer(stream) {
@@ -238,29 +373,40 @@
             source = audioContext.createMediaStreamSource(stream);
             source.connect(analyser);
             analyser.fftSize = 256;
+
+            canvas.width = canvas.offsetWidth * 2;
+            canvas.height = canvas.offsetHeight * 2;
+            canvasCtx.scale(2, 2);
+
             drawVisualizer();
         }
 
         function drawVisualizer() {
             const bufferLength = analyser.frequencyBinCount;
             const dataArray = new Uint8Array(bufferLength);
+            const width = canvas.offsetWidth;
+            const height = canvas.offsetHeight;
 
             const draw = () => {
                 animationId = requestAnimationFrame(draw);
                 analyser.getByteFrequencyData(dataArray);
 
-                canvasCtx.fillStyle = '#000';
-                canvasCtx.fillRect(0, 0, canvas.width, canvas.height);
+                canvasCtx.fillStyle = '#1C1C1E';
+                canvasCtx.fillRect(0, 0, width, height);
 
-                const barWidth = (canvas.width / bufferLength) * 2.5;
-                let barHeight;
+                const barWidth = width / bufferLength * 2;
                 let x = 0;
 
                 for (let i = 0; i < bufferLength; i++) {
-                    barHeight = dataArray[i] / 2;
-                    canvasCtx.fillStyle = `rgb(${barHeight + 100}, 50, 50)`;
-                    canvasCtx.fillRect(x, canvas.height - barHeight, barWidth, barHeight);
-                    x += barWidth + 1;
+                    const barHeight = (dataArray[i] / 255) * height * 0.8;
+
+                    const gradient = canvasCtx.createLinearGradient(0, height - barHeight, 0, height);
+                    gradient.addColorStop(0, '#007AFF');
+                    gradient.addColorStop(1, '#0056CC');
+
+                    canvasCtx.fillStyle = gradient;
+                    canvasCtx.fillRect(x, height - barHeight, barWidth - 1, barHeight);
+                    x += barWidth;
                 }
             };
             draw();
@@ -269,13 +415,11 @@
         function visualizeStop() {
             if (animationId) cancelAnimationFrame(animationId);
             if (audioContext) audioContext.close();
-            canvasCtx.fillStyle = '#000';
-            canvasCtx.fillRect(0, 0, canvas.width, canvas.height);
+            canvasCtx.fillStyle = '#1C1C1E';
+            canvasCtx.fillRect(0, 0, canvas.offsetWidth, canvas.offsetHeight);
         }
 
         async function uploadToGitHub(blob) {
-            statusEl.textContent = 'Uploading to GitHub...';
-
             const reader = new FileReader();
             reader.readAsDataURL(blob);
             reader.onloadend = async () => {
@@ -299,18 +443,22 @@
                     });
 
                     if (response.ok) {
-                        statusEl.textContent = 'Upload Successful!';
-                        statusEl.style.color = 'var(--secondary-color)';
+                        statusEl.textContent = 'Upload successful!';
+                        statusEl.className = 'status success';
                     } else {
                         const errorData = await response.json();
-                        statusEl.textContent = `Upload Failed: ${errorData.message}`;
-                        statusEl.style.color = 'var(--error-color)';
-                        console.error('GitHub Error:', errorData);
+                        statusEl.textContent = `Failed: ${errorData.message}`;
+                        statusEl.className = 'status error';
                     }
                 } catch (error) {
                     statusEl.textContent = `Error: ${error.message}`;
-                    statusEl.style.color = 'var(--error-color)';
+                    statusEl.className = 'status error';
                 }
+
+                setTimeout(() => {
+                    statusEl.textContent = 'Tap to Record';
+                    statusEl.className = 'status';
+                }, 3000);
             };
         }
     </script>
