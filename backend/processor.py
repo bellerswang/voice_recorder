@@ -3,10 +3,6 @@ import os
 import logging
 
 # Setup Path to include 'Util' directory
-# Assuming structure:
-# .../PythonScripts/
-#       |-- voice_recorder/backend/processor.py
-#       |-- Util/multimedia_to_text/
 current_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.dirname(current_dir) # voice_recorder
 python_scripts_root = os.path.dirname(project_root) # PythonScripts
@@ -19,46 +15,40 @@ if os.path.exists(util_path):
 else:
     print(f"Warning: Util directory not found at {util_path}")
 
-# Attempt to import the transcriber
-# User instructions: "calls the transcription functions from your Util folder"
+transcriber_instance = None
+
 try:
-    # Try generic import first. Adjust this based on actual Util structure.
-    # If the folder is 'multimedia_to_text' inside 'Util':
-    from multimedia_to_text import main as transcriber_module
-    # OR if it's directly in Util:
-    # import multimedia_to_text as transcriber_module
+    from multimedia_to_text import WhisperTranscriber
+    # Initialize once if possible, or lazy init
+    # We will lazy init in the function or global scope if arguments aren't needed
+    # Assuming default init is fine. If it requires model_path, we might need to adjust.
+    try:
+        transcriber_instance = WhisperTranscriber()
+    except Exception as e:
+        print(f"Error initializing WhisperTranscriber: {e}")
+        
 except ImportError as e:
     print(f"ImportError: {e}")
-    transcriber_module = None
 
 def process_audio(file_path):
     """
     Process the audio file using the imported transcriber.
     Returns the transcription text.
     """
-    if not transcriber_module:
-        return "Error: Transcriber module not loaded. Check processor.py imports."
+    global transcriber_instance
+    if not transcriber_instance:
+        return "Error: Transcriber module not loaded or initialized."
 
     print(f"Transcribing {file_path}...")
     
     try:
-        # Assuming a 'transcribe' or 'process' function exists. 
-        # You may need to adjust this function name matches your Util code.
-        if hasattr(transcriber_module, 'transcribe_file'):
-            return transcriber_module.transcribe_file(file_path)
-        elif hasattr(transcriber_module, 'transcribe'):
-            return transcriber_module.transcribe(file_path)
-        elif hasattr(transcriber_module, 'main'):
-             # Some scripts use main(args)
-             return transcriber_module.main(file_path)
+        # Check methods
+        if hasattr(transcriber_instance, 'transcribe_to_text'):
+            return transcriber_instance.transcribe_to_text(file_path)
+        elif hasattr(transcriber_instance, 'transcribe'):
+             return transcriber_instance.transcribe(file_path)
         else:
-            # Fallback: try to find a callable
-            for attr_name in dir(transcriber_module):
-                attr = getattr(transcriber_module, attr_name)
-                if callable(attr) and 'transcribe' in attr_name.lower():
-                    return attr(file_path)
-            
-            return "Error: Could not find a suitable transcribe function in module."
+            return "Error: No suitable transcribe method found on WhisperTranscriber."
 
     except Exception as e:
         print(f"Error during transcription: {e}")
