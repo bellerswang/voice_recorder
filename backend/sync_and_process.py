@@ -248,8 +248,8 @@ def get_or_create_doc(gdocs, state):
     doc_id = state.get('current_doc')
     volume = state.get('volume', 1)
     
-    # Generate doc name
-    doc_name = DOC_BASE_NAME if volume == 1 else f"{DOC_BASE_NAME} - Vol {volume}"
+    # Generate doc name (always with Vol suffix for consistency)
+    doc_name = f"{DOC_BASE_NAME} - Vol {volume}"
     
     # Try to find existing doc
     if doc_id:
