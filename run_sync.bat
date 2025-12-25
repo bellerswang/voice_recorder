@@ -14,5 +14,3 @@ if %errorlevel% neq 0 (
 
 REM Run the sync and process script
 python backend/sync_and_process.py
-
-pause
