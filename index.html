@@ -84,6 +84,29 @@
             margin: 1rem 0;
             border-radius: 4px;
         }
+
+        .config-section {
+            margin-top: 2rem;
+            padding-top: 1rem;
+            border-top: 1px solid #333;
+            text-align: left;
+        }
+
+        .config-section input {
+            width: 100%;
+            padding: 8px;
+            margin: 5px 0 15px 0;
+            background: #2a2a2a;
+            border: 1px solid #444;
+            border-radius: 4px;
+            color: white;
+            box-sizing: border-box;
+        }
+
+        .config-section label {
+            font-size: 0.9rem;
+            color: #aaa;
+        }
     </style>
 </head>
 
@@ -101,7 +124,11 @@
 
         <div id="status" class="status">Ready</div>
 
-        <!-- Config UI Hidden -->
+        <div class="config-section" id="configSection">
+            <label>GitHub Token (stored locally only)</label>
+            <input type="password" id="tokenInput" placeholder="ghp_...">
+            <button id="saveTokenBtn" style="width: 100%;">Save Token</button>
+        </div>
     </div>
 
     <script>
@@ -117,23 +144,47 @@
         const startBtn = document.getElementById('startBtn');
         const stopBtn = document.getElementById('stopBtn');
         const statusEl = document.getElementById('status');
+        const tokenInput = document.getElementById('tokenInput');
+        const saveTokenBtn = document.getElementById('saveTokenBtn');
+        const configSection = document.getElementById('configSection');
 
-        // SECURITY: These are Base64 encoded. 
-        // To generate your token hash, open Chrome Console (F12) and type: btoa('ghp_YOUR_REAL_TOKEN_HERE')
-        // Then paste the result below.
-        const SECURE_CONFIG = {
-            ownerHash: 'YmVsbGVyc3dhbmc=', // bellerswang
-            repoHash: 'dm9pY2VfcmVjb3JkZXI=', // voice_recorder
-            tokenHash: 'REPLACE_WITH_YOUR_BASE64_TOKEN' // e.g. Z2hwXzEyMzQ1...
+        // Fixed config (safe to commit)
+        const CONFIG = {
+            owner: 'bellerswang',
+            repo: 'voice_recorder'
         };
 
-        const decode = (str) => atob(str);
+        // Load token from localStorage
+        function getToken() {
+            return localStorage.getItem('gh_token') || '';
+        }
+
+        function setToken(token) {
+            localStorage.setItem('gh_token', token);
+        }
+
+        // Initialize
+        tokenInput.value = getToken();
+        if (getToken()) {
+            configSection.style.display = 'none';
+        }
+
+        saveTokenBtn.addEventListener('click', () => {
+            const token = tokenInput.value.trim();
+            if (token) {
+                setToken(token);
+                configSection.style.display = 'none';
+                statusEl.textContent = 'Token saved!';
+                setTimeout(() => statusEl.textContent = 'Ready', 2000);
+            }
+        });
 
         startBtn.addEventListener('click', async () => {
-            // Basic check to see if user replaced the placeholder
-            if (SECURE_CONFIG.tokenHash === 'REPLACE_WITH_YOUR_BASE64_TOKEN') {
-                statusEl.textContent = 'Error: Please update tokenHash in the code!';
+            const token = getToken();
+            if (!token) {
+                statusEl.textContent = 'Please enter your GitHub token first.';
                 statusEl.style.color = 'var(--error-color)';
+                configSection.style.display = 'block';
                 return;
             }
 
@@ -168,7 +219,7 @@
             mediaRecorder.onstop = async () => {
                 const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
                 visualizeStop();
-                stream.getTracks().forEach(track => track.stop()); // Stop mic
+                stream.getTracks().forEach(track => track.stop());
                 await uploadToGitHub(audioBlob);
             };
 
@@ -178,7 +229,6 @@
             statusEl.textContent = 'Recording...';
             statusEl.style.color = 'var(--secondary-color)';
 
-            // Visualization
             setupVisualizer(stream);
         }
 
@@ -233,17 +283,13 @@
                 const filename = `recording_${new Date().toISOString().replace(/[:.]/g, '-')}.webm`;
                 const path = `recordings/${filename}`;
 
-                const owner = decode(SECURE_CONFIG.ownerHash);
-                const repo = decode(SECURE_CONFIG.repoHash);
-                const token = decode(SECURE_CONFIG.tokenHash);
-
-                const url = `https://api.github.com/repos/${owner}/${repo}/contents/${path}`;
+                const url = `https://api.github.com/repos/${CONFIG.owner}/${CONFIG.repo}/contents/${path}`;
 
                 try {
                     const response = await fetch(url, {
                         method: 'PUT',
                         headers: {
-                            'Authorization': `token ${token}`,
+                            'Authorization': `token ${getToken()}`,
                             'Content-Type': 'application/json'
                         },
                         body: JSON.stringify({
@@ -254,6 +300,7 @@
 
                     if (response.ok) {
                         statusEl.textContent = 'Upload Successful!';
+                        statusEl.style.color = 'var(--secondary-color)';
                     } else {
                         const errorData = await response.json();
                         statusEl.textContent = `Upload Failed: ${errorData.message}`;
