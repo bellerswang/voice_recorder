@@ -33,8 +33,9 @@
 
 ### 录音（手机）
 1. 打开 https://bellerswang.github.io/voice_recorder/
-2. 点击蓝色圆形按钮开始录音
-3. 再次点击停止并上传
+2. **选择文件夹**（可选）：从 "Recording Folder" 下拉菜单选择分类
+3. 点击蓝色圆形按钮开始录音
+4. 再次点击停止并上传
 
 ### 转换（电脑）
 1. 双击 `run_sync.bat`
@@ -103,3 +104,61 @@ https://drive.google.com/drive/folders/1c6IZkrEqOQnzF3hyByxQGYgyVyeUfxsu
 2. Generate new token (classic)
 3. 勾选 `repo` 权限
 4. 复制 `ghp_...` 开头的字符串
+
+---
+
+## 📁 文件夹管理
+
+### 什么是文件夹功能?
+
+你可以将录音分类到不同的文件夹，例如：
+- `LifeVoice` - 日常个人记录
+- `WorkNotes` - 工作会议笔记
+- `Ideas` - 灵感想法
+
+每个文件夹的转录会保存到独立的 Google 文档系列中。
+
+### 如何添加新文件夹？
+
+1. **编辑配置文件** `folders.json`：
+
+```json
+{
+  "folders": [
+    {
+      "id": "LifeVoice",
+      "name": "Life Voice",
+      "description": "Personal daily recordings",
+      "default": true,
+      "gdrive_folder_id": "1c6IZkrEqOQnzF3hyByxQGYgyVyeUfxsu"
+    },
+    {
+      "id": "WorkNotes",
+      "name": "Work Notes",
+      "description": "工作会议笔记",
+      "default": false,
+      "gdrive_folder_id": "你的Google Drive文件夹ID"
+    }
+  ]
+}
+```
+
+2. **重新加载网页** - 新文件夹自动出现在下拉菜单中
+
+3. **开始录音** - 选择文件夹后录音，系统会自动处理
+
+### 文档命名规则
+
+每个文件夹有独立的文档系列：
+- `LifeVoice` → "Life Voice Transcripts - Vol 1"
+- `WorkNotes` → "Work Notes Transcripts - Vol 1"
+
+### 配置说明
+
+| 字段 | 说明 | 必填 |
+|------|------|------|
+| `id` | 文件夹标识符（英文，无空格） | 是 |
+| `name` | 下拉菜单显示名称 | 是 |
+| `description` | 鼠标悬停提示文本 | 否 |
+| `default` | 是否为默认选中 | 否 |
+| `gdrive_folder_id` | Google Drive 文件夹 ID | 是 |

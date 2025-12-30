@@ -41,6 +41,7 @@ CREDENTIALS_PATH = os.path.join(current_dir, 'credential', 'key.json')
 RECORDINGS_DIR = os.path.join(project_root, 'recordings')
 LOG_DIR = os.path.join(project_root, 'logs')
 STATE_FILE = os.path.join(LOG_DIR, 'processed_state.json')
+FOLDERS_CONFIG_FILE = os.path.join(project_root, 'folders.json')
 
 # Document Settings
 DOC_BASE_NAME = "Voice Transcripts"
@@ -197,14 +198,48 @@ def run_git_command(args, cwd=project_root):
         return None
 
 
+def load_folder_config():
+    """Load folder configuration from folders.json"""
+    try:
+        with open(FOLDERS_CONFIG_FILE, 'r', encoding='utf-8') as f:
+            config = json.load(f)
+            return config.get('folders', [])
+    except FileNotFoundError:
+        logging.warning(f"Folders config not found at {FOLDERS_CONFIG_FILE}, using default")
+        return [{
+            'id': 'LifeVoice',
+            'name': 'Life Voice',
+            'default': True,
+            'gdrive_folder_id': GDRIVE_FOLDER_ID
+        }]
+    except Exception as e:
+        logging.error(f"Error loading folder config: {e}")
+        return []
+
+
 def load_state():
+    """Load state from file and migrate if necessary"""
     if os.path.exists(STATE_FILE):
         try:
             with open(STATE_FILE, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        except:
-            pass
-    return {'processed_files': [], 'current_doc': None, 'volume': 1}
+                state = json.load(f)
+                # Migrate old format to new folder-based format
+                if 'folders' not in state:
+                    logging.info("Migrating state to folder-based structure")
+                    state = {
+                        'folders': {
+                            'LifeVoice': {
+                                'processed_files': state.get('processed_files', []),
+                                'current_doc': state.get('current_doc'),
+                                'volume': state.get('volume', 1)
+                            }
+                        }
+                    }
+                    save_state(state)
+                return state
+        except Exception as e:
+            logging.error(f"Error loading state: {e}")
+    return {'folders': {}}
 
 
 def save_state(state):
@@ -243,13 +278,13 @@ def format_transcript(recording_time, content):
     return f"[{time_short}] {content}\n\n"
 
 
-def get_or_create_doc(gdocs, state):
+def get_or_create_doc(gdocs, folder_state, folder_name='Voice'):
     """Get current document or create new one if needed"""
-    doc_id = state.get('current_doc')
-    volume = state.get('volume', 1)
+    doc_id = folder_state.get('current_doc')
+    volume = folder_state.get('volume', 1)
     
-    # Generate doc name (always with Vol suffix for consistency)
-    doc_name = f"{DOC_BASE_NAME} - Vol {volume}"
+    # Generate doc name with folder prefix
+    doc_name = f"{folder_name} Transcripts - Vol {volume}"
     
     # Try to find existing doc
     if doc_id:
@@ -259,28 +294,27 @@ def get_or_create_doc(gdocs, state):
         else:
             # Need new volume
             volume += 1
-            doc_name = f"{DOC_BASE_NAME} - Vol {volume}"
-            state['volume'] = volume
+            doc_name = f"{folder_name} Transcripts - Vol {volume}"
+            folder_state['volume'] = volume
     
     # Look for existing doc by name
     existing_id = gdocs.find_doc_by_name(doc_name)
     if existing_id:
         size = gdocs.get_doc_size(existing_id)
         if size < MAX_DOC_SIZE:
-            state['current_doc'] = existing_id
+            folder_state['current_doc'] = existing_id
             return existing_id, doc_name, size
         else:
             # Existing doc is full, create new volume
             volume += 1
-            doc_name = f"{DOC_BASE_NAME} - Vol {volume}"
-            state['volume'] = volume
+            doc_name = f"{folder_name} Transcripts - Vol {volume}"
+            folder_state['volume'] = volume
     
     # Create new document
     new_id = gdocs.create_document(doc_name)
     if new_id:
-        state['current_doc'] = new_id
-        state['volume'] = volume
-        return new_id, doc_name, 1
+        folder_state['current_doc'] = new_id
+        folder_state['volume'] = volume
     
     return None, None, 0
 
@@ -293,23 +327,16 @@ def main():
     logging.info("Pulling latest from GitHub...")
     run_git_command(['pull'])
     
-    # 2. Find new audio files
-    extensions = ['*.webm', '*.m4a', '*.wav', '*.mp3']
-    all_files = []
-    for ext in extensions:
-        all_files.extend(glob.glob(os.path.join(RECORDINGS_DIR, ext)))
-    
-    state = load_state()
-    processed_set = set(state.get('processed_files', []))
-    new_files = [f for f in all_files if os.path.basename(f) not in processed_set]
-    
-    if not new_files:
-        logging.info("No new files to process.")
+    # 2. Load folder configuration
+    folders = load_folder_config()
+    if not folders:
+        logging.error("No folders configured")
         return
     
-    logging.info(f"Found {len(new_files)} new file(s) to process")
+    # 3. Load state
+    state = load_state()
     
-    # 3. Initialize Google Docs Manager
+    # 4. Initialize Google Docs Manager
     try:
         gdocs = GoogleDocManager()
     except FileNotFoundError as e:
@@ -318,57 +345,95 @@ def main():
         return
     
     files_to_delete = []
+    total_processed = 0
     
-    for audio_file in sorted(new_files):
-        filename = os.path.basename(audio_file)
-        logging.info(f"Processing: {filename}")
+    # 5. Process each folder
+    for folder in folders:
+        folder_id = folder['id']
+        folder_name = folder['name']
+        folder_path = os.path.join(RECORDINGS_DIR, folder_id)
         
-        # Extract timestamp from filename (recording_2025-12-25T00-04-21-189Z.webm)
-        try:
-            ts_part = filename.replace('recording_', '').replace('.webm', '').replace('.m4a', '').replace('.wav', '').replace('.mp3', '')
-            # Convert 2025-12-25T00-04-21-189Z to readable format
-            recording_time = ts_part.replace('T', ' ').replace('-', ':', 2).replace('-', ':').rsplit(':', 1)[0].replace(':', '-', 2)
-        except:
-            recording_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        
-        # Transcribe
-        text = transcribe_audio(audio_file)
-        if not text or not text.strip():
-            logging.warning(f"Empty transcription for {filename}")
-            text = "[No speech detected]"
-        
-        # Format content
-        transcript_entry = format_transcript(recording_time, text.strip())
-        
-        # Get or create document
-        doc_id, doc_name, current_size = get_or_create_doc(gdocs, state)
-        
-        if not doc_id:
-            logging.error("Failed to get/create document, skipping file")
+        # Skip if folder doesn't exist
+        if not os.path.exists(folder_path):
+            logging.info(f"Folder '{folder_id}' doesn't exist yet, skipping")
             continue
         
-        # Check if content fits, otherwise create new volume
-        if current_size + len(transcript_entry) > MAX_DOC_SIZE:
-            state['volume'] = state.get('volume', 1) + 1
-            state['current_doc'] = None
-            doc_id, doc_name, current_size = get_or_create_doc(gdocs, state)
+        # Get or create folder state
+        if folder_id not in state['folders']:
+            state['folders'][folder_id] = {
+                'processed_files': [],
+                'current_doc': None,
+                'volume': 1
+            }
+        
+        folder_state = state['folders'][folder_id]
+        processed_set = set(folder_state.get('processed_files', []))
+        
+        # Find new audio files in this folder
+        extensions = ['*.webm', '*.m4a', '*.wav', '*.mp3']
+        new_files = []
+        for ext in extensions:
+            pattern = os.path.join(folder_path, ext)
+            found_files = glob.glob(pattern)
+            new_files.extend([f for f in found_files if os.path.basename(f) not in processed_set])
+        
+        if not new_files:
+            logging.info(f"No new files in folder '{folder_id}'")
+            continue
+        
+        logging.info(f"Found {len(new_files)} new file(s) in folder '{folder_id}'")
+        
+        # Process files in this folder
+        for audio_file in sorted(new_files):
+            filename = os.path.basename(audio_file)
+            logging.info(f"Processing [{folder_id}]: {filename}")
+            
+            # Extract timestamp from filename
+            try:
+                ts_part = filename.replace('recording_', '').replace('.webm', '').replace('.m4a', '').replace('.wav', '').replace('.mp3', '')
+                recording_time = ts_part.replace('T', ' ').replace('-', ':', 2).replace('-', ':').rsplit(':', 1)[0].replace(':', '-', 2)
+            except:
+                recording_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            
+            # Transcribe
+            text = transcribe_audio(audio_file)
+            if not text or not text.strip():
+                logging.warning(f"Empty transcription for {filename}")
+                text = "[No speech detected]"
+            
+            # Format content
+            transcript_entry = format_transcript(recording_time, text.strip())
+            
+            # Get or create document for this folder
+            doc_id, doc_name, current_size = get_or_create_doc(gdocs, folder_state, folder_name)
             
             if not doc_id:
-                logging.error("Failed to create new volume, skipping file")
+                logging.error("Failed to get/create document, skipping file")
                 continue
-        
-        # Append to document
-        if gdocs.append_content(doc_id, transcript_entry):
-            state['processed_files'].append(filename)
-            save_state(state)
-            files_to_delete.append(audio_file)
-            logging.info(f"✅ Added to '{doc_name}'")
-        else:
-            logging.error(f"❌ Failed to append: {filename}")
+            
+            # Check if content fits, otherwise create new volume
+            if current_size + len(transcript_entry) > MAX_DOC_SIZE:
+                folder_state['volume'] = folder_state.get('volume', 1) + 1
+                folder_state['current_doc'] = None
+                doc_id, doc_name, current_size = get_or_create_doc(gdocs, folder_state, folder_name)
+                
+                if not doc_id:
+                    logging.error("Failed to create new volume, skipping file")
+                    continue
+            
+            # Append to document
+            if gdocs.append_content(doc_id, transcript_entry):
+                folder_state['processed_files'].append(filename)
+                save_state(state)
+                files_to_delete.append(audio_file)
+                total_processed += 1
+                logging.info(f"✅ Added to '{doc_name}'")
+            else:
+                logging.error(f"❌ Failed to append: {filename}")
     
-    # 4. Clean up - delete processed audio files from GitHub
+    # 6. Clean up - delete processed audio files from GitHub
     if files_to_delete:
-        logging.info("Cleaning up processed audio files from GitHub...")
+        logging.info(f"Cleaning up {len(files_to_delete)} processed audio file(s) from GitHub...")
         for f in files_to_delete:
             rel_path = os.path.relpath(f, project_root)
             run_git_command(['rm', rel_path])
@@ -381,7 +446,8 @@ def main():
         else:
             logging.warning("Failed to push deletions to GitHub")
     
-    logging.info("Done!")
+    logging.info("=" * 50)
+    logging.info(f"Done! Processed {total_processed} recording(s)")
     logging.info(f"View transcriptions: https://drive.google.com/drive/folders/{GDRIVE_FOLDER_ID}")
 
 

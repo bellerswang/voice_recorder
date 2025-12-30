@@ -1,0 +1,11 @@
+{
+    "folders": [
+        {
+            "id": "LifeVoice",
+            "name": "Life Voice",
+            "description": "Personal daily recordings",
+            "default": true,
+            "gdrive_folder_id": "1c6IZkrEqOQnzF3hyByxQGYgyVyeUfxsu"
+        }
+    ]
+}

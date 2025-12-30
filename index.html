@@ -218,12 +218,55 @@
         .status.recording {
             animation: pulse 1.5s ease-in-out infinite;
         }
+
+        /* Folder Selector */
+        .folder-selector {
+            width: 100%;
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            padding: 12px 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .folder-dropdown {
+            width: 100%;
+            background: var(--bg-tertiary);
+            border: none;
+            border-radius: 8px;
+            padding: 12px;
+            font-size: 17px;
+            color: var(--text-primary);
+            outline: none;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23999' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 12px center;
+            padding-right: 36px;
+            cursor: pointer;
+        }
+
+        .folder-dropdown:focus {
+            background-color: #3A3A3C;
+        }
+
+        .folder-icon {
+            margin-right: 8px;
+        }
     </style>
 </head>
 
 <body>
     <div class="container">
         <h1>Voice Recorder</h1>
+
+        <div class="folder-selector">
+            <span class="settings-label"><span class="folder-icon">📁</span>Recording Folder</span>
+            <select id="folderSelect" class="folder-dropdown">
+                <option value="LifeVoice">Life Voice</option>
+            </select>
+        </div>
 
         <canvas id="visualizer"></canvas>
 
@@ -264,6 +307,9 @@
         const saveTokenBtn = document.getElementById('saveTokenBtn');
         const configSection = document.getElementById('configSection');
         const changeTokenLink = document.getElementById('changeTokenLink');
+        const folderSelect = document.getElementById('folderSelect');
+
+        let foldersConfig = { folders: [] };
 
         const CONFIG = {
             owner: 'bellerswang',
@@ -278,10 +324,53 @@
             localStorage.setItem('gh_token', token);
         }
 
+        function getSelectedFolder() {
+            return localStorage.getItem('selected_folder') || 'LifeVoice';
+        }
+
+        function setSelectedFolder(folderId) {
+            localStorage.setItem('selected_folder', folderId);
+        }
+
+        // Load folders configuration
+        async function loadFolders() {
+            try {
+                const response = await fetch('folders.json');
+                foldersConfig = await response.json();
+
+                // Populate dropdown
+                folderSelect.innerHTML = '';
+                foldersConfig.folders.forEach(folder => {
+                    const option = document.createElement('option');
+                    option.value = folder.id;
+                    option.textContent = folder.name;
+                    if (folder.description) {
+                        option.title = folder.description;
+                    }
+                    folderSelect.appendChild(option);
+                });
+
+                // Set selected folder from localStorage or default
+                const savedFolder = getSelectedFolder();
+                const defaultFolder = foldersConfig.folders.find(f => f.default);
+                folderSelect.value = savedFolder || (defaultFolder ? defaultFolder.id : foldersConfig.folders[0].id);
+            } catch (err) {
+                console.error('Failed to load folders:', err);
+                // Keep default LifeVoice option if loading fails
+            }
+        }
+
         // Initialize
+        loadFolders();
+
         if (!getToken()) {
             configSection.classList.remove('hidden');
         }
+
+        // Folder selection change handler
+        folderSelect.addEventListener('change', () => {
+            setSelectedFolder(folderSelect.value);
+        });
 
         changeTokenLink.addEventListener('click', () => {
             configSection.classList.toggle('hidden');
@@ -425,7 +514,8 @@
             reader.onloadend = async () => {
                 const base64data = reader.result.split(',')[1];
                 const filename = `recording_${new Date().toISOString().replace(/[:.]/g, '-')}.webm`;
-                const path = `recordings/${filename}`;
+                const selectedFolder = folderSelect.value || 'LifeVoice';
+                const path = `recordings/${selectedFolder}/${filename}`;
 
                 const url = `https://api.github.com/repos/${CONFIG.owner}/${CONFIG.repo}/contents/${path}`;
 
