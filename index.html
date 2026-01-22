@@ -157,6 +157,31 @@
             font-weight: 600;
             line-height: 1.4;
             letter-spacing: -0.5px;
+            transition: opacity 0.2s ease;
+        }
+
+        .refresh-btn {
+            margin-top: 24px;
+            background: rgba(255, 255, 255, 0.15);
+            border: none;
+            color: var(--text-secondary);
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s cubic-bezier(0.4, 0.0, 0.2, 1);
+            font-size: 20px;
+            -webkit-backdrop-filter: blur(10px);
+            backdrop-filter: blur(10px);
+        }
+
+        .refresh-btn:active {
+            transform: scale(0.92);
+            background: rgba(255, 255, 255, 0.25);
+            color: var(--text-primary);
         }
 
         .carousel-dots {
@@ -379,6 +404,8 @@
         const CONFIG = { owner: 'bellerswang', repo: 'voice_recorder' };
 
         // --- Questions & Carousel ---
+        let globalCategories = [];
+
         async function loadQuestions() {
             try {
                 const response = await fetch('question_list.txt');
@@ -386,40 +413,46 @@
                 const text = await response.text();
 
                 const sections = text.split('###');
-                const questions = [];
+                globalCategories = [];
 
                 sections.forEach(section => {
                     const lines = section.trim().split('\n');
                     if (lines.length < 2) return;
-                    const titleLine = lines[0].trim().replace(/\(.*\)/, '').trim(); // Remove English part for brevity
+                    const titleLine = lines[0].trim().replace(/\(.*\)/, '').trim();
                     const questionLines = lines.slice(1).filter(line => /^\d+\./.test(line.trim()));
+
                     if (questionLines.length > 0) {
-                        const randomQuestion = questionLines[Math.floor(Math.random() * questionLines.length)];
-                        questions.push({
+                        const cleanQuestions = questionLines.map(q => q.replace(/^\d+\.\s*/, '').trim());
+                        globalCategories.push({
                             category: titleLine,
-                            text: randomQuestion.replace(/^\d+\.\s*/, '').trim()
+                            allQuestions: cleanQuestions,
+                            currentQuestion: cleanQuestions[Math.floor(Math.random() * cleanQuestions.length)]
                         });
                     }
                 });
 
-                renderCarousel(questions.slice(0, 4)); // Limit to 4
+                renderCarousel();
             } catch (err) {
                 console.error('Error loading questions:', err);
             }
         }
 
-        function renderCarousel(questions) {
+        function renderCarousel() {
             questionsTrack.innerHTML = '';
             carouselDots.innerHTML = '';
 
-            questions.forEach((q, index) => {
+            const categoriesToShow = globalCategories.slice(0, 4);
+
+            categoriesToShow.forEach((cat, index) => {
                 // Slide
                 const slide = document.createElement('div');
                 slide.className = 'question-slide';
                 if (index === 0) slide.classList.add('active');
+
                 slide.innerHTML = `
-                    <div class="q-category">${q.category}</div>
-                    <div class="q-text">${q.text}</div>
+                    <div class="q-category">${cat.category}</div>
+                    <div class="q-text">${cat.currentQuestion}</div>
+                    <button class="refresh-btn" onclick="refreshQuestion('${cat.category}', this)">↻</button>
                 `;
                 questionsTrack.appendChild(slide);
 
@@ -430,11 +463,9 @@
                 carouselDots.appendChild(dot);
             });
 
-            // Intersection Observer to update active state
             const observer = new IntersectionObserver((entries) => {
                 entries.forEach(entry => {
                     if (entry.isIntersecting) {
-                        // Find index
                         const index = Array.from(questionsTrack.children).indexOf(entry.target);
                         updateActiveState(index);
                     }
@@ -442,6 +473,45 @@
             }, { threshold: 0.5 });
 
             Array.from(questionsTrack.children).forEach(slide => observer.observe(slide));
+        }
+
+        function refreshQuestion(categoryName, btnElement) {
+            const catData = globalCategories.find(c => c.category === categoryName);
+            if (!catData) return;
+
+            // Pick a new random question
+            let newQ = catData.currentQuestion;
+            if (catData.allQuestions.length > 1) {
+                let attempts = 0;
+                while (newQ === catData.currentQuestion && attempts < 10) {
+                    newQ = catData.allQuestions[Math.floor(Math.random() * catData.allQuestions.length)];
+                    attempts++;
+                }
+            }
+            catData.currentQuestion = newQ;
+
+            // Update DOM
+            const slide = btnElement.closest('.question-slide');
+            const qTextEl = slide.querySelector('.q-text');
+
+            // Animation for text change
+            qTextEl.style.opacity = 0;
+            setTimeout(() => {
+                qTextEl.textContent = newQ;
+                qTextEl.style.opacity = 1;
+            }, 200);
+
+            // Animate button spin
+            btnElement.style.transition = 'transform 0.4s ease';
+            btnElement.style.transform = 'rotate(360deg)';
+
+            setTimeout(() => {
+                btnElement.style.transition = 'none';
+                btnElement.style.transform = 'none';
+                // Trigger reflow
+                void btnElement.offsetWidth;
+                btnElement.style.transition = 'all 0.2s cubic-bezier(0.4, 0.0, 0.2, 1)';
+            }, 400);
         }
 
         function updateActiveState(index) {

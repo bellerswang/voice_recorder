@@ -250,6 +250,7 @@ def save_state(state):
 
 def transcribe_audio(file_path):
     if not transcriber_instance:
+        logging.error("Transcriber instance is None! Initialization must have failed.")
         return None
     
     try:
@@ -315,7 +316,6 @@ def get_or_create_doc(gdocs, folder_state, folder_name='Voice'):
     if new_id:
         folder_state['current_doc'] = new_id
         folder_state['volume'] = volume
-        return new_id, doc_name, 1
     
     return None, None, 0
 
