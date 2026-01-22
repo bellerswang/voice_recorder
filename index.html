@@ -4,9 +4,6 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-    <meta http-equiv="Pragma" content="no-cache">
-    <meta http-equiv="Expires" content="0">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>Voice Recorder</title>
@@ -258,14 +255,34 @@
             margin-right: 8px;
         }
 
-        .version-info {
-            position: fixed;
-            bottom: 10px;
-            left: 50%;
-            transform: translateX(-50%);
+        /* Questions Section */
+        .questions-container {
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .question-card {
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            padding: 16px;
+            border-left: 4px solid var(--ios-blue);
+        }
+
+        .question-category {
             font-size: 11px;
+            text-transform: uppercase;
             color: var(--text-secondary);
-            opacity: 0.5;
+            margin-bottom: 6px;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+        }
+
+        .question-text {
+            font-size: 15px;
+            color: var(--text-primary);
+            line-height: 1.4;
         }
     </style>
 </head>
@@ -279,6 +296,11 @@
             <select id="folderSelect" class="folder-dropdown">
                 <option value="LifeVoice">Life Voice</option>
             </select>
+        </div>
+
+        <!-- Questions Section -->
+        <div id="questionsContainer" class="questions-container">
+            <!-- Questions will be injected here -->
         </div>
 
         <canvas id="visualizer"></canvas>
@@ -301,8 +323,6 @@
                 <button class="ios-button" id="saveTokenBtn">Save Token</button>
             </div>
         </div>
-
-        <div class="version-info">v2.0-folders</div>
     </div>
 
     <script>
@@ -323,6 +343,7 @@
         const configSection = document.getElementById('configSection');
         const changeTokenLink = document.getElementById('changeTokenLink');
         const folderSelect = document.getElementById('folderSelect');
+        const questionsContainer = document.getElementById('questionsContainer');
 
         let foldersConfig = { folders: [] };
 
@@ -330,6 +351,58 @@
             owner: 'bellerswang',
             repo: 'voice_recorder'
         };
+
+        // Load Questions
+        async function loadQuestions() {
+            try {
+                const response = await fetch('question_list.txt');
+                if (!response.ok) throw new Error('Failed to load questions');
+                const text = await response.text();
+
+                const sections = text.split('###');
+                const questions = [];
+
+                // Process each section (skip first empty/intro section if needed)
+                sections.forEach(section => {
+                    const lines = section.trim().split('\n');
+                    if (lines.length < 2) return; // Skip empty sections
+
+                    const titleLine = lines[0].trim(); // e.g. "🛡️ 育儿与情绪 (Parenting & Emotions)"
+                    // Filter lines that look like questions (start with a number)
+                    const questionLines = lines.slice(1).filter(line => /^\d+\./.test(line.trim()));
+
+                    if (questionLines.length > 0) {
+                        const randomQuestion = questionLines[Math.floor(Math.random() * questionLines.length)];
+                        // Remove the leading number and dot (e.g., "1. " -> "")
+                        const cleanQuestion = randomQuestion.replace(/^\d+\.\s*/, '').trim();
+
+                        questions.push({
+                            category: titleLine,
+                            text: cleanQuestion
+                        });
+                    }
+                });
+
+                // Render questions
+                questionsContainer.innerHTML = '';
+                questions.forEach((q, index) => {
+                    // Limit to 4 questions max if there are more sections, though user asked for one per section and there are 4 sections.
+                    if (index >= 4) return;
+
+                    const card = document.createElement('div');
+                    card.className = 'question-card';
+                    card.innerHTML = `
+                        <div class="question-category">${q.category}</div>
+                        <div class="question-text">${q.text}</div>
+                    `;
+                    questionsContainer.appendChild(card);
+                });
+
+            } catch (err) {
+                console.error('Error loading questions:', err);
+                // Optionally hide container or show default message
+            }
+        }
 
         function getToken() {
             return localStorage.getItem('gh_token') || '';
@@ -377,6 +450,7 @@
 
         // Initialize
         loadFolders();
+        loadQuestions();
 
         if (!getToken()) {
             configSection.classList.remove('hidden');
