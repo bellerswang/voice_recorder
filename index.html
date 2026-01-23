@@ -157,7 +157,7 @@
             font-weight: 600;
             line-height: 1.4;
             letter-spacing: -0.5px;
-            transition: opacity 0.2s ease;
+            transition: opacity 0.15s ease;
         }
 
         .refresh-btn {
@@ -182,6 +182,21 @@
             transform: scale(0.92);
             background: rgba(255, 255, 255, 0.25);
             color: var(--text-primary);
+        }
+
+        .refresh-btn.spinning {
+            animation: spin 0.4s ease-in-out;
+            color: var(--text-primary);
+        }
+
+        @keyframes spin {
+            from {
+                transform: rotate(0deg);
+            }
+
+            to {
+                transform: rotate(360deg);
+            }
         }
 
         .carousel-dots {
@@ -499,19 +514,12 @@
             setTimeout(() => {
                 qTextEl.textContent = newQ;
                 qTextEl.style.opacity = 1;
-            }, 200);
+            }, 100);
 
-            // Animate button spin
-            btnElement.style.transition = 'transform 0.4s ease';
-            btnElement.style.transform = 'rotate(360deg)';
-
-            setTimeout(() => {
-                btnElement.style.transition = 'none';
-                btnElement.style.transform = 'none';
-                // Trigger reflow
-                void btnElement.offsetWidth;
-                btnElement.style.transition = 'all 0.2s cubic-bezier(0.4, 0.0, 0.2, 1)';
-            }, 400);
+            // Animate button spin using class
+            if (btnElement.classList.contains('spinning')) return;
+            btnElement.classList.add('spinning');
+            setTimeout(() => btnElement.classList.remove('spinning'), 400);
         }
 
         function updateActiveState(index) {
@@ -620,7 +628,7 @@
             analyser = audioContext.createAnalyser();
             source = audioContext.createMediaStreamSource(stream);
             source.connect(analyser);
-            analyser.fftSize = 64; // Low res for smooth wave
+            analyser.fftSize = 64; // Keep low for chunkier bars
 
             canvas.width = canvas.offsetWidth;
             canvas.height = canvas.offsetHeight;
@@ -632,29 +640,39 @@
             const bufferLength = analyser.frequencyBinCount;
             const dataArray = new Uint8Array(bufferLength);
 
+            // Bar styles
+            const BAR_GAP = 2;
+            const BAR_RADIUS = 2; // Rounded tops
+
             const draw = () => {
                 animationId = requestAnimationFrame(draw);
                 analyser.getByteFrequencyData(dataArray);
 
                 canvasCtx.clearRect(0, 0, canvas.width, canvas.height);
 
-                // Simple centered wave
-                canvasCtx.lineWidth = 2;
-                canvasCtx.strokeStyle = '#FF3B30';
-                canvasCtx.beginPath();
+                const totalGap = (bufferLength - 1) * BAR_GAP;
+                const barWidth = (canvas.width - totalGap) / bufferLength;
 
-                const sliceWidth = canvas.width * 1.0 / bufferLength;
                 let x = 0;
 
                 for (let i = 0; i < bufferLength; i++) {
-                    const v = dataArray[i] / 128.0;
-                    const y = v * canvas.height / 2;
-                    if (i === 0) canvasCtx.moveTo(x, y);
-                    else canvasCtx.lineTo(x, y);
-                    x += sliceWidth;
+                    // Scale value for visual height
+                    const value = dataArray[i];
+                    const percent = value / 255;
+                    const barHeight = Math.max(4, percent * canvas.height * 0.8); // Min height 4px
+
+                    // Draw rounded bar
+                    canvasCtx.fillStyle = '#FF3B30';
+
+                    // Centered vertically
+                    const y = (canvas.height - barHeight) / 2;
+
+                    canvasCtx.beginPath();
+                    canvasCtx.roundRect(x, y, barWidth, barHeight, BAR_RADIUS);
+                    canvasCtx.fill();
+
+                    x += barWidth + BAR_GAP;
                 }
-                canvasCtx.lineTo(canvas.width, canvas.height / 2);
-                canvasCtx.stroke();
             };
             draw();
         }
