@@ -288,6 +288,86 @@
             font-weight: 500;
         }
 
+        /* Text Input Button */
+        .text-input-btn {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            border: 2px solid var(--text-secondary);
+            background: transparent;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s cubic-bezier(0.4, 0.0, 0.2, 1);
+            font-size: 24px;
+            color: var(--text-secondary);
+            margin-left: 20px;
+        }
+
+        .text-input-btn:active {
+            transform: scale(0.92);
+            border-color: var(--ios-blue);
+            color: var(--ios-blue);
+        }
+
+        /* Text Input Modal */
+        .text-input-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(10px);
+            z-index: 100;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s;
+        }
+
+        .text-input-overlay.visible {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .text-input-card {
+            width: 90%;
+            max-width: 500px;
+            background: var(--bg-secondary);
+            border-radius: 14px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .text-input-card h3 {
+            margin: 0;
+            font-size: 18px;
+        }
+
+        .text-textarea {
+            width: 100%;
+            min-height: 200px;
+            background: var(--bg-primary);
+            border: 1px solid var(--separator);
+            border-radius: 8px;
+            padding: 12px;
+            color: white;
+            font-size: 16px;
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif;
+            resize: vertical;
+        }
+
+        .text-textarea:focus {
+            outline: none;
+            border-color: var(--ios-blue);
+        }
+
         /* Settings Overlay */
         .settings-overlay {
             position: fixed;
@@ -379,9 +459,12 @@
     <div class="footer">
         <div id="status" class="status-text">Tap to Record</div>
         <canvas id="visualizer"></canvas>
-        <button class="record-btn" id="recordBtn">
-            <div class="record-btn-inner"></div>
-        </button>
+        <div style="display: flex; align-items: center; justify-content: center;">
+            <button class="record-btn" id="recordBtn">
+                <div class="record-btn-inner"></div>
+            </button>
+            <button class="text-input-btn" id="textInputBtn" title="Text Input">📝</button>
+        </div>
     </div>
 
     <!-- Settings Modal -->
@@ -394,6 +477,16 @@
             </div>
             <button class="ios-button" id="saveTokenBtn">Save</button>
             <button class="close-settings" id="closeSettings">Close</button>
+        </div>
+    </div>
+
+    <!-- Text Input Modal -->
+    <div class="text-input-overlay" id="textInputOverlay">
+        <div class="text-input-card">
+            <h3>Text Input</h3>
+            <textarea class="text-textarea" id="textInput" placeholder="Enter your transcript here..."></textarea>
+            <button class="ios-button" id="submitTextBtn">Submit</button>
+            <button class="close-settings" id="closeTextInput">Cancel</button>
         </div>
     </div>
 
@@ -419,6 +512,13 @@
         const folderSelect = document.getElementById('folderSelect');
         const questionsTrack = document.getElementById('questionsTrack');
         const carouselDots = document.getElementById('carouselDots');
+
+        // Text input elements
+        const textInputBtn = document.getElementById('textInputBtn');
+        const textInputOverlay = document.getElementById('textInputOverlay');
+        const textInput = document.getElementById('textInput');
+        const submitTextBtn = document.getElementById('submitTextBtn');
+        const closeTextInput = document.getElementById('closeTextInput');
 
         let foldersConfig = { folders: [] };
         const CONFIG = { owner: 'bellerswang', repo: 'voice_recorder' };
@@ -578,6 +678,39 @@
 
         folderSelect.onchange = () => setSelectedFolder(folderSelect.value);
 
+        // Text input modal handlers
+        textInputBtn.onclick = () => {
+            textInputOverlay.classList.add('visible');
+            textInput.value = '';
+            textInput.focus();
+        };
+
+        closeTextInput.onclick = () => {
+            textInputOverlay.classList.remove('visible');
+        };
+
+        submitTextBtn.onclick = async () => {
+            const text = textInput.value.trim();
+            if (!text) {
+                statusEl.textContent = 'No text entered';
+                setTimeout(() => statusEl.textContent = 'Tap to Record', 2000);
+                return;
+            }
+
+            if (!getToken()) {
+                statusEl.textContent = 'Setup Token first!';
+                textInputOverlay.classList.remove('visible');
+                settingsOverlay.classList.add('visible');
+                return;
+            }
+
+            // Close modal and show uploading
+            textInputOverlay.classList.remove('visible');
+            statusEl.textContent = 'Uploading text...';
+
+            await uploadTextToGitHub(text);
+        };
+
         recordBtn.onclick = async () => {
             if (isRecording) stopRecording();
             else await startRecording();
@@ -696,6 +829,47 @@
             if (animationId) cancelAnimationFrame(animationId);
             if (audioContext) audioContext.close();
             canvasCtx.clearRect(0, 0, canvas.width, canvas.height);
+        }
+
+        // --- Upload Text ---
+        async function uploadTextToGitHub(text) {
+            const filename = `text_input_${new Date().toISOString().replace(/[:.]/g, '-')}.txt`;
+            const folder = getSelectedFolder();
+            const path = `recordings/${folder}/${filename}`;
+            const url = `https://api.github.com/repos/${CONFIG.owner}/${CONFIG.repo}/contents/${path}`;
+
+            // Convert text to base64
+            const base64data = btoa(unescape(encodeURIComponent(text)));
+
+            try {
+                const res = await fetch(url, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `token ${getToken()}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        message: `Add text input ${filename}`,
+                        content: base64data
+                    })
+                });
+                if (res.ok) {
+                    statusEl.textContent = 'Text saved!';
+                    statusEl.style.color = 'var(--ios-green)';
+                } else {
+                    const err = await res.json();
+                    statusEl.textContent = 'Upload Failed';
+                    console.error(err);
+                }
+            } catch (e) {
+                statusEl.textContent = 'Error';
+                console.error(e);
+            }
+
+            setTimeout(() => {
+                statusEl.textContent = 'Tap to Record';
+                statusEl.style.color = 'var(--text-secondary)';
+            }, 2000);
         }
 
         // --- Upload ---

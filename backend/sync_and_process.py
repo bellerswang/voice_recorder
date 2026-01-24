@@ -370,8 +370,8 @@ def main():
         folder_state = state['folders'][folder_id]
         processed_set = set(folder_state.get('processed_files', []))
         
-        # Find new audio files in this folder
-        extensions = ['*.webm', '*.m4a', '*.wav', '*.mp3']
+        # Find new audio files and text files in this folder
+        extensions = ['*.webm', '*.m4a', '*.wav', '*.mp3', '*.txt']
         new_files = []
         for ext in extensions:
             pattern = os.path.join(folder_path, ext)
@@ -389,18 +389,39 @@ def main():
             filename = os.path.basename(audio_file)
             logging.info(f"Processing [{folder_id}]: {filename}")
             
+            # Check if this is a text file or audio file
+            is_text_file = filename.lower().endswith('.txt')
+            
             # Extract timestamp from filename
             try:
-                ts_part = filename.replace('recording_', '').replace('.webm', '').replace('.m4a', '').replace('.wav', '').replace('.mp3', '')
+                if is_text_file:
+                    # text_input_YYYY-MM-DDTHH-MM-SS-SSSZ.txt
+                    ts_part = filename.replace('text_input_', '').replace('.txt', '')
+                else:
+                    # recording_YYYY-MM-DDTHH-MM-SS-SSSZ.webm
+                    ts_part = filename.replace('recording_', '').replace('.webm', '').replace('.m4a', '').replace('.wav', '').replace('.mp3', '')
                 recording_time = ts_part.replace('T', ' ').replace('-', ':', 2).replace('-', ':').rsplit(':', 1)[0].replace(':', '-', 2)
             except:
                 recording_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             
-            # Transcribe
-            text = transcribe_audio(audio_file)
-            if not text or not text.strip():
-                logging.warning(f"Empty transcription for {filename}")
-                text = "[No speech detected]"
+            # Get content: transcribe audio OR read text file
+            if is_text_file:
+                # Read text file directly
+                try:
+                    with open(audio_file, 'r', encoding='utf-8') as f:
+                        text = f.read()
+                    if not text.strip():
+                        logging.warning(f"Empty text file: {filename}")
+                        text = "[Empty text input]"
+                except Exception as e:
+                    logging.error(f"Failed to read text file {filename}: {e}")
+                    text = "[Error reading text file]"
+            else:
+                # Transcribe audio
+                text = transcribe_audio(audio_file)
+                if not text or not text.strip():
+                    logging.warning(f"Empty transcription for {filename}")
+                    text = "[No speech detected]"
             
             # Format content
             transcript_entry = format_transcript(recording_time, text.strip())
