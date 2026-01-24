@@ -172,10 +172,15 @@
             align-items: center;
             justify-content: center;
             cursor: pointer;
-            transition: all 0.2s cubic-bezier(0.4, 0.0, 0.2, 1);
+            transition: transform 0.2s cubic-bezier(0.4, 0.0, 0.2, 1), background 0.2s, color 0.2s;
             font-size: 20px;
-            -webkit-backdrop-filter: blur(10px);
-            backdrop-filter: blur(10px);
+            /* Removed backdrop-filter for mobile performance */
+            /* -webkit-backdrop-filter: blur(10px); */
+            /* backdrop-filter: blur(10px); */
+            will-change: transform;
+            -webkit-transform: translateZ(0);
+            /* Hardware acceleration */
+            transform: translateZ(0);
         }
 
         .refresh-btn:active {
@@ -630,8 +635,14 @@
             source.connect(analyser);
             analyser.fftSize = 64; // Keep low for chunkier bars
 
-            canvas.width = canvas.offsetWidth;
-            canvas.height = canvas.offsetHeight;
+            const dpr = window.devicePixelRatio || 1;
+            const rect = canvas.getBoundingClientRect();
+
+            canvas.width = rect.width * dpr;
+            canvas.height = rect.height * dpr;
+
+            // Scale context to match DPI
+            canvasCtx.scale(dpr, dpr);
 
             drawVisualizer();
         }
@@ -648,10 +659,14 @@
                 animationId = requestAnimationFrame(draw);
                 analyser.getByteFrequencyData(dataArray);
 
-                canvasCtx.clearRect(0, 0, canvas.width, canvas.height);
+                canvasCtx.clearRect(0, 0, canvas.width / (window.devicePixelRatio || 1), canvas.height / (window.devicePixelRatio || 1));
+
+                // We use logical width/height for calculations because of context scaling
+                const width = canvas.width / (window.devicePixelRatio || 1);
+                const height = canvas.height / (window.devicePixelRatio || 1);
 
                 const totalGap = (bufferLength - 1) * BAR_GAP;
-                const barWidth = (canvas.width - totalGap) / bufferLength;
+                const barWidth = (width - totalGap) / bufferLength;
 
                 let x = 0;
 
@@ -659,13 +674,13 @@
                     // Scale value for visual height
                     const value = dataArray[i];
                     const percent = value / 255;
-                    const barHeight = Math.max(4, percent * canvas.height * 0.8); // Min height 4px
+                    const barHeight = Math.max(4, percent * height * 0.8); // Min height 4px
 
                     // Draw rounded bar
                     canvasCtx.fillStyle = '#FF3B30';
 
                     // Centered vertically
-                    const y = (canvas.height - barHeight) / 2;
+                    const y = (height - barHeight) / 2;
 
                     canvasCtx.beginPath();
                     canvasCtx.roundRect(x, y, barWidth, barHeight, BAR_RADIUS);
