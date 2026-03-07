@@ -476,6 +476,8 @@
                 <input type="password" class="settings-input" id="tokenInput" placeholder="ghp_...">
             </div>
             <button class="ios-button" id="saveTokenBtn">Save</button>
+            <button class="ios-button" style="background: var(--text-secondary); margin-top: 10px;"
+                onclick="location.reload(true)">Reload App</button>
             <button class="close-settings" id="closeSettings">Close</button>
         </div>
     </div>
@@ -644,7 +646,8 @@
 
         async function loadFolders() {
             try {
-                const response = await fetch('folders.json');
+                // Add a timestamp to avoid caching issues on mobile
+                const response = await fetch('folders.json?t=' + Date.now());
                 foldersConfig = await response.json();
                 folderSelect.innerHTML = '';
                 foldersConfig.folders.forEach(folder => {
