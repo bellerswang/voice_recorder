@@ -13,6 +13,13 @@
             "description": "Work-related ideas and thoughts",
             "default": false,
             "gdrive_folder_id": "152gEo0QJl-oq1isU1_zdnz3Fi1lOEV5a"
+        },
+        {
+            "id": "HydrationExcretion",
+            "name": "喝水排尿记录",
+            "description": "喝水排尿记录",
+            "default": false,
+            "gdrive_folder_id": "1vOHRRX45giu1cew6rmv5uDj4AR_C4rRK"
         }
     ]
 }
